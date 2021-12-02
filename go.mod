@@ -1,3 +1,3 @@
 module github.com/shivanshkc/confetti
 
-go 1.16
+go 1.17
