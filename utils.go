@@ -40,7 +40,27 @@ func string2Interface(kind reflect.Kind, value string) (interface{}, error) {
 
 	var converted interface{}
 	if err := json.Unmarshal([]byte(value), &converted); err != nil {
-		return nil, fmt.Errorf("failed to convert value: %w", err)
+		return nil, err
 	}
 	return converted, nil
+}
+
+// formatNestedFieldName accepts a field and its parents to create a formatted name string.
+// Example: Parent1.Parent2.MyField
+func formatNestedFieldName(parents []rsf, field rsf) string {
+	var formatted string
+	for _, parent := range parents {
+		formatted += fmt.Sprintf("%s.", parent.Name)
+	}
+	formatted += field.Name
+	return formatted
+}
+
+// checkAndWrapErr returns nil if 'err' is nil.
+// If 'err' is not nil, it wraps the 'err' in 'wrappingErr' and returns it.
+func checkAndWrapErr(err error, wrappingErr error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s %w", wrappingErr.Error(), err)
 }
