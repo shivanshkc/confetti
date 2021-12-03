@@ -4,11 +4,6 @@ import (
 	"os"
 )
 
-// newResolver returns a new iResolver instance.
-func newResolver(opts *LoaderOptions) iResolver {
-	return &implResolver{opts: opts}
-}
-
 // implResolver implements iResolver.
 type implResolver struct {
 	// opts keeps the LoaderOptions.

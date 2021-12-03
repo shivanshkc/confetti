@@ -6,15 +6,6 @@ import (
 	"os"
 )
 
-// newFlagger returns a new iFlagger instance.
-func newFlagger(opts *LoaderOptions) iFlagger {
-	return &implFlagger{
-		opts:    opts,
-		flagSet: flag.NewFlagSet(opts.Title, flag.ContinueOnError),
-		flags:   map[string]*customFlagHolder{},
-	}
-}
-
 // implFlagger implements iFlagger.
 type implFlagger struct {
 	// opts keeps the LoaderOptions.

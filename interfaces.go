@@ -1,20 +1,8 @@
 package confetti
 
-// NewDefLoader provides a new ILoader instance with default settings.
-func NewDefLoader() ILoader {
-	return NewLoader(*defaultLoaderOptions)
-}
-
-// NewLoader provides a new ILoader instance.
-func NewLoader(opts LoaderOptions) ILoader {
-	// Filling out missing option values.
-	opts.complete()
-	return &implLoader{
-		opts:     &opts,
-		flagger:  newFlagger(&opts),
-		resolver: newResolver(&opts),
-	}
-}
+import (
+	"flag"
+)
 
 // ILoader represents a configuration loader.
 type ILoader interface {
@@ -37,4 +25,34 @@ type iResolver interface {
 	// ResolveField resolves the value of a struct field using the various struct tags.
 	// It requires an iFlagger to get the flag values.
 	ResolveField(parents []rsf, field rsf, flagger iFlagger) (resolved interface{}, err error)
+}
+
+// NewDefLoader provides a new ILoader instance with default settings.
+func NewDefLoader() ILoader {
+	return NewLoader(*defaultLoaderOptions)
+}
+
+// NewLoader provides a new ILoader instance.
+func NewLoader(opts LoaderOptions) ILoader {
+	// Filling out missing option values.
+	opts.complete()
+	return &implLoader{
+		opts:     &opts,
+		flagger:  newFlagger(&opts),
+		resolver: newResolver(&opts),
+	}
+}
+
+// newFlagger returns a new iFlagger instance.
+func newFlagger(opts *LoaderOptions) iFlagger {
+	return &implFlagger{
+		opts:    opts,
+		flagSet: flag.NewFlagSet(opts.Title, flag.ContinueOnError),
+		flags:   map[string]*customFlagHolder{},
+	}
+}
+
+// newResolver returns a new iResolver instance.
+func newResolver(opts *LoaderOptions) iResolver {
+	return &implResolver{opts: opts}
 }
