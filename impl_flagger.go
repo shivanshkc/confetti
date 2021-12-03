@@ -72,10 +72,6 @@ func (i *implFlagger) RegisterField(parents []rsf, field rsf) error {
 }
 
 func (i *implFlagger) LookupFlag(flagName string) (flagValue string, exists bool) {
-	if !i.flagSet.Parsed() {
-		i.flagSet.Parse(os.Args[1:])
-	}
-
 	holder, exists := i.flags[flagName]
 	return holder.String(), exists && holder.exists
 }
