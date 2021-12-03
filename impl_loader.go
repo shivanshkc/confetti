@@ -127,6 +127,11 @@ func (i *implLoader) resolveFieldWrapper(targetMap msi) structFieldAction {
 			}
 			nestedMap = nestedMap[parent.Name].(msi)
 		}
+
+		// If the field type is struct, then the resolved value should be an empty map instead of nil.
+		if resolved == nil && field.Type.Kind() == reflect.Struct {
+			resolved = msi{}
+		}
 		nestedMap[field.Name] = resolved
 		return nil
 	}
