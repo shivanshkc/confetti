@@ -3,9 +3,7 @@ package confetti
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
-	"os"
 	"reflect"
 
 	"github.com/joho/godotenv"
@@ -15,10 +13,9 @@ import (
 type implLoader struct {
 	// opts keeps the LoaderOptions.
 	opts *LoaderOptions
-	// flagSet is responsible for parsing of flags.
-	flagSet *flag.FlagSet
-	// flags keeps track of all flag values.
-	flags map[string]*customFlagHolder
+
+	flagger  iFlagger
+	resolver iResolver
 }
 
 func (i *implLoader) Load(target interface{}) error {
@@ -27,8 +24,6 @@ func (i *implLoader) Load(target interface{}) error {
 		return errors.New("target must be a struct pointer")
 	}
 
-	// Fill out all options values.
-	i.opts = mergeOptions(i.opts, defaultLoaderOptions)
 	// Reading the .env file as per the option.
 	if i.opts.UseDotEnv {
 		_ = godotenv.Load()
@@ -37,164 +32,102 @@ func (i *implLoader) Load(target interface{}) error {
 	// Getting the value out of the struct pointer to loop over its fields.
 	structValue := reflect.ValueOf(target).Elem().Interface()
 
-	// Parsing and persisting all required flags.
-	i.setupFlags(structValue)
-
-	// Generating the map for the struct.
-	generatedMap, err := i.generateMap(structValue)
-	if err != nil {
-		return fmt.Errorf("failed to generate map: %w", err)
+	// Creating the flagSet.
+	if err := i.forEachStructField(structValue, i.flagger.RegisterField, nil); err != nil {
+		return fmt.Errorf("failed to create flagSet: %w", err)
 	}
 
-	// Converting the generatedMap into JSON for unmarshalling.
-	generatedJSON, err := json.Marshal(generatedMap)
-	if err != nil {
-		return fmt.Errorf("failed to marshal generated map: %+v", err)
+	// Parsing all the flags.
+	if err := i.flagger.Parse(); err != nil {
+		return err
 	}
 
-	// Finally, unmarshalling into the provided target.
-	if err := json.Unmarshal(generatedJSON, target); err != nil {
-		return fmt.Errorf("failed to unmarshal results into target: %w", err)
+	targetMap := msi{}
+	// Loading all values inside the targetMap.
+	if err := i.forEachStructField(structValue, i.resolveFieldWrapper(targetMap), nil); err != nil {
+		return fmt.Errorf("failed to resolve values: %w", err)
+	}
+
+	// Marshalling the targetMap values into JSON.
+	targetJSON, err := json.Marshal(targetMap)
+	if err != nil {
+		return fmt.Errorf("failed to marshal the targetMap: %w", err)
+	}
+
+	// Finally, unmarshalling the JSON into the target struct.
+	if err := json.Unmarshal(targetJSON, target); err != nil {
+		return fmt.Errorf("failed to unmarshal into target: %w", err)
 	}
 
 	return nil
 }
 
-func (i *implLoader) setupFlags(structValue interface{}) {
+// forEachStructField loops over all the fields of the provided input (struct)
+// and calls action for each of those fields.
+//
+// The "value" argument should be a struct (not even a struct pointer).
+//
+// The "action" argument is the function to be called for each field.
+//
+// The "parents" argument is received by recursive calls made internally.
+// External calls should provide this value as nil.
+func (i *implLoader) forEachStructField(value interface{}, action structFieldAction, parents []rsf) error {
 	// Creating reflection types for looping over fields.
-	reflectValue := reflect.ValueOf(structValue)
-	reflectType := reflect.TypeOf(structValue)
+	reflectValue := reflect.ValueOf(value)
+	reflectType := reflect.TypeOf(value)
 
-	// If flagSet is nil, it means it is the first call.
-	// Otherwise, it is a call through recursion.
-	if i.flagSet == nil {
-		// Initializing the flagSet. All further calls will be through recursion.
-		i.flagSet = flag.NewFlagSet(reflectType.Name(), flag.ContinueOnError)
-		i.flags = map[string]*customFlagHolder{}
-
-		// The flags will be parsed when the function returns.
-		defer func() { _ = i.flagSet.Parse(os.Args[1:]) }()
-	}
-
+	// Looping over all struct fields.
 	for ind := 0; ind < reflectValue.NumField(); ind++ {
 		fieldReflectValue := reflectValue.Field(ind)
 		fieldReflectType := reflectType.Field(ind)
 
-		// Getting the value of the arg tag.
-		argTagValue, present := fieldReflectType.Tag.Lookup(i.opts.ArgTagName)
-		if !present || argTagValue == "" {
-			continue
-		}
-
-		// The flagName is the name of the flag to be parsed.
-		// The flagDoc is the usage info of the flag.
-		flagName, flagDoc := getFlagNameAndDoc(argTagValue, ",")
-		if flagName == "" {
-			continue
-		}
-		if flagDoc != "" {
-			// For a more understandable display.
-			flagDoc += "\n"
-		}
-
-		// Using the def and env tag values to show even more info on "-h".
-		defValue, present := fieldReflectType.Tag.Lookup(i.opts.DefTagName)
-		if !present {
-			defValue = "not provided"
-		}
-
-		envValue, present := fieldReflectType.Tag.Lookup(i.opts.EnvTagName)
-		if !present || envValue == "" {
-			envValue = "not provided"
-		}
-
-		// The usage instructions that will show up on "-h".
-		usage := fmt.Sprintf("%sDefault: %s\nEnvironment: %s", flagDoc, defValue, envValue)
-
-		// Binding the flag values to customFlagHolder.
-		i.flags[flagName] = &customFlagHolder{}
-		i.flagSet.Var(i.flags[flagName], flagName, usage)
-
-		// If the field is of type struct, we will dive into it recursively.
-		if fieldReflectValue.Kind() == reflect.Struct {
-			i.setupFlags(fieldReflectValue.Interface())
-		}
-	}
-}
-
-// generateMap generates the map for the provided structValue according to the tags provided.
-func (i *implLoader) generateMap(structValue interface{}) (interface{}, error) {
-	generatedMap := map[string]interface{}{}
-
-	// Creating reflection types for looping over fields.
-	reflectValue := reflect.ValueOf(structValue)
-	reflectType := reflect.TypeOf(structValue)
-
-	for ind := 0; ind < reflectValue.NumField(); ind++ {
-		fieldReflectValue := reflectValue.Field(ind)
-		fieldReflectType := reflectType.Field(ind)
-
-		// If field is of pointer type, we extract the pointer's value.
-		// This allows for cleaner code below.
+		// If field is of pointer type, we extract the pointer's value. This allows for cleaner code below.
 		if fieldReflectValue.Kind() == reflect.Ptr {
 			fieldReflectValue = fieldReflectValue.Elem()
 		}
 
-		// Resolving the value of the struct field.
-		resolvedValue, err := i.resolveField(fieldReflectType)
-		if err != nil {
-			return "", fmt.Errorf("failed to resolve field: %w", err)
+		// Calling action of the struct field.
+		if err := action(parents, &fieldReflectType); err != nil {
+			return err
 		}
 
-		// If the field is of type struct, we will dive into it recursively.
-		if fieldReflectValue.Kind() == reflect.Struct {
-			// This is the value of the struct as dictated by the tags on its fields.
-			resolvedInsideValue, err := i.generateMap(fieldReflectValue.Interface())
-			if err != nil {
-				return "", err
-			}
-
-			// Populating inside value with any additional fields that outside value may have.
-			mergeMaps(resolvedInsideValue.(map[string]interface{}), resolvedValue.(map[string]interface{}))
-			// Ditching the outside value completely.
-			resolvedValue = resolvedInsideValue
+		// If the field is not a struct, there's nothing else to be done.
+		if fieldReflectValue.Kind() != reflect.Struct {
+			continue
 		}
 
-		// Putting the resolved value in the map.
-		generatedMap[fieldReflectType.Name] = resolvedValue
+		// Appending the parent before doing the recursive call.
+		newParents := append(parents, &fieldReflectType)
+		// Looping over the nested struct fields.
+		if err := i.forEachStructField(fieldReflectValue.Interface(), action, newParents); err != nil {
+			return err
+		}
 	}
 
-	return generatedMap, nil
+	return nil
 }
 
-// resolveField uses the specified (or default) tag names to resolve value of a single struct field.
-func (i *implLoader) resolveField(field reflect.StructField) (interface{}, error) {
-	var tagValue string
-	var present bool
-
-	tagValue, present = field.Tag.Lookup(i.opts.ArgTagName)
-	if present && tagValue != "" {
-		// Getting only the flagName. We don't need flagDoc here.
-		flagName, _ := getFlagNameAndDoc(tagValue, ",")
-
-		holder, exists := i.flags[flagName]
-		if exists && holder.setCalled {
-			return string2Interface(field.Type.Kind(), holder.String())
+// resolveFieldWrapper is a wrapper around the iResolver.ResolveField method to
+// make it a valid structFieldAction while also putting the targetMap in the scope.
+func (i *implLoader) resolveFieldWrapper(targetMap msi) structFieldAction {
+	return func(parents []rsf, field rsf) error {
+		// Getting the resolved value.
+		resolved, err := i.resolver.ResolveField(parents, field, i.flagger)
+		if err != nil {
+			return err
 		}
-	}
 
-	tagValue, present = field.Tag.Lookup(i.opts.EnvTagName)
-	if present && tagValue != "" {
-		value, exists := os.LookupEnv(tagValue)
-		if exists {
-			return string2Interface(field.Type.Kind(), value)
+		// Creating a separate map.
+		// So, we won't lose the reference to the original targetMap.
+		nestedMap := targetMap
+		// Creating a nested entry inside the targetMap.
+		for _, parent := range parents {
+			if _, exists := nestedMap[parent.Name]; !exists {
+				nestedMap[parent.Name] = msi{}
+			}
+			nestedMap = nestedMap[parent.Name].(msi)
 		}
+		nestedMap[field.Name] = resolved
+		return nil
 	}
-
-	tagValue, present = field.Tag.Lookup(i.opts.DefTagName)
-	if present {
-		return string2Interface(field.Type.Kind(), tagValue)
-	}
-
-	return nil, nil
 }
