@@ -19,3 +19,20 @@ type LoaderOptions struct {
 	// UseDotEnv controls whether to read data from the .env file.
 	UseDotEnv bool
 }
+
+// customFlagHolder keeps track of the flagValue, and whether
+// it was ever set or not.
+type customFlagHolder struct {
+	flagValue string
+	setCalled bool
+}
+
+func (c *customFlagHolder) String() string {
+	return c.flagValue
+}
+
+func (c *customFlagHolder) Set(s string) error {
+	c.setCalled = true
+	c.flagValue = s
+	return nil
+}

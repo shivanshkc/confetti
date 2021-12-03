@@ -23,6 +23,11 @@ tools:
 	$(if $(go_lint), , go install $(go_lint_url))
 	$(if $(static_check), , go install $(static_check_url))
 
+# Runs the "go mod tidy" command.
+tidy:
+	@echo "+$@"
+	@go mod tidy
+
 # Runs static-check over the project.
 check: tools
 	@echo "+$@"
@@ -49,7 +54,7 @@ lint: tools
 	@$(go_lint) ./...
 
 # Builds the project and outputs the binary.
-build: check vet imports fmt lint
+build: tidy check vet imports fmt lint
 	@echo "+$@"
 	@go build .
 
