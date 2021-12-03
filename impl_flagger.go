@@ -10,7 +10,7 @@ import (
 func newFlagger(opts *LoaderOptions) iFlagger {
 	return &implFlagger{
 		opts:    opts,
-		flagSet: flag.NewFlagSet("configs", flag.ContinueOnError),
+		flagSet: flag.NewFlagSet(opts.Title, flag.ContinueOnError),
 		flags:   map[string]*customFlagHolder{},
 	}
 }
