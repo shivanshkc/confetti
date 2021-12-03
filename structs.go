@@ -20,11 +20,25 @@ type LoaderOptions struct {
 	UseDotEnv bool
 }
 
-// customFlagHolder keeps track of the flagValue, and whether
-// it was ever set or not.
+// complete checks all fields in the struct and fills in any absent ones using the default options.
+func (l *LoaderOptions) complete() {
+	if l.DefTagName == "" {
+		l.DefTagName = defaultLoaderOptions.DefTagName
+	}
+	if l.EnvTagName == "" {
+		l.EnvTagName = defaultLoaderOptions.EnvTagName
+	}
+	if l.ArgTagName == "" {
+		l.ArgTagName = defaultLoaderOptions.ArgTagName
+	}
+}
+
+// customFlagHolder keeps track of the flagValue, and whether it was ever set or not.
 type customFlagHolder struct {
+	// flagValue is the value of the flag.
 	flagValue string
-	setCalled bool
+	// exists is true only if the flagValue has been set at least once.
+	exists bool
 }
 
 func (c *customFlagHolder) String() string {
@@ -32,7 +46,7 @@ func (c *customFlagHolder) String() string {
 }
 
 func (c *customFlagHolder) Set(s string) error {
-	c.setCalled = true
+	c.exists = true
 	c.flagValue = s
 	return nil
 }
