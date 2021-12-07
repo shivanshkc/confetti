@@ -16,10 +16,10 @@ func TestImplFlagger_RegisterField(t *testing.T) {
 	}
 
 	dummyTarget := struct {
-		// RegisterField should work with empty def tag.
-		dummyField1 string `def:"" env:"DF1" arg:"df-1"`
-		// RegisterField should work with empty env tag.
-		dummyField2 string `def:"2" env:"" arg:"df-2,with doc"`
+		// RegisterField should work with absent def tag.
+		dummyField1 string `env:"DF1" arg:"df-1"`
+		// RegisterField should work with absent env tag.
+		dummyField2 string `def:"2" arg:"df-2,with doc"`
 		// RegisterField should work with all tags present.
 		dummyField3 string `def:"3" env:"DF3" arg:"df-3"`
 	}{}
