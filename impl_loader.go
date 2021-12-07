@@ -86,6 +86,10 @@ func (i *implLoader) forEachStructField(value interface{}, action structFieldAct
 			fieldReflectValue = fieldReflectValue.Elem()
 		}
 
+		if fieldReflectValue.Kind() == reflect.Invalid {
+			return errors.New("invalid kind detected: avoid using pointers")
+		}
+
 		// Calling action of the struct field.
 		if err := action(parents, &fieldReflectType); err != nil {
 			return err

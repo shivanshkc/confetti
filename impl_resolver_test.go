@@ -6,24 +6,10 @@ import (
 	"testing"
 )
 
-// implMockFlagger is a mock implementation of iFlagger.
-type implMockFlagger struct {
-	argMap map[string]string
-}
-
-func (i *implMockFlagger) RegisterField(_ []rsf, _ rsf) error { return nil }
-
-func (i *implMockFlagger) Parse() error { return nil }
-
-func (i *implMockFlagger) LookupFlag(flagName string) (flagValue string, exists bool) {
-	value, exists := i.argMap[flagName]
-	return value, exists
-}
-
 // TestImplResolver_ResolveField tests if the ResolveField method works as expected with correct inputs.
 func TestImplResolver_ResolveField(t *testing.T) {
 	instance := &implResolver{opts: defaultLoaderOptions}
-	flagger := &implMockFlagger{argMap: map[string]string{}}
+	flagger := &implMockFlagger{argMap: map[string]string{}, registerErr: nil}
 
 	// The expected resolved value of each field is governed by the mockers slice below.
 	dummyTarget := struct {
@@ -83,7 +69,7 @@ func TestImplResolver_ResolveField(t *testing.T) {
 // TestImplResolver_ResolveField_BadType tests if ResolveField returns an error upon bad value types.
 func TestImplResolver_ResolveField_BadType(t *testing.T) {
 	instance := &implResolver{opts: defaultLoaderOptions}
-	flagger := &implMockFlagger{argMap: map[string]string{}}
+	flagger := &implMockFlagger{argMap: map[string]string{}, registerErr: nil}
 
 	// The expected resolved value of each field is governed by the mockers slice below.
 	// But note that the values are of bad data types, so they will not be resolved.
