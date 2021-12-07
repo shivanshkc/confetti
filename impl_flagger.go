@@ -52,7 +52,7 @@ func (i *implFlagger) RegisterField(parents []rsf, field rsf) error {
 	}
 
 	// The usage instructions that will show up on "-h".
-	usage := fmt.Sprintf("%s\nDefault: %s\nEnvironment: %s", flagDoc, defValue, envValue)
+	usage := fmt.Sprintf("Doc: %s\nDefault: %s\nEnvironment: %s", flagDoc, defValue, envValue)
 
 	// Binding the flag values to customFlagHolder.
 	i.flags[flagName] = &customFlagHolder{}
