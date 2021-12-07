@@ -16,13 +16,6 @@ type implFlagger struct {
 	flags map[string]*customFlagHolder
 }
 
-func (i *implFlagger) Parse() error {
-	if err := i.flagSet.Parse(os.Args[1:]); err != nil {
-		return fmt.Errorf("failed to parse flags: %w", err)
-	}
-	return nil
-}
-
 func (i *implFlagger) RegisterField(parents []rsf, field rsf) error {
 	// Getting the value of the arg tag.
 	argTagValue, present := field.Tag.Lookup(i.opts.ArgTagName)
@@ -58,6 +51,13 @@ func (i *implFlagger) RegisterField(parents []rsf, field rsf) error {
 	i.flags[flagName] = &customFlagHolder{}
 	i.flagSet.Var(i.flags[flagName], flagName, usage)
 
+	return nil
+}
+
+func (i *implFlagger) Parse() error {
+	if err := i.flagSet.Parse(os.Args[1:]); err != nil {
+		return fmt.Errorf("failed to parse flags: %w", err)
+	}
 	return nil
 }
 
