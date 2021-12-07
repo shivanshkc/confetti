@@ -4,66 +4,35 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 )
-
-// structFieldAction represents an action that can be performed over a nested struct field.
-// It handles nested fields well because it receives all the parents of the field as well.
-type structFieldAction func(parents []*reflect.StructField, field *reflect.StructField) error
 
 // isStructPointer returns true if the input is a struct pointer, otherwise false.
 func isStructPointer(input interface{}) bool {
 	value := reflect.ValueOf(input)
-	if value.Kind() != reflect.Ptr {
-		return false
-	}
-
-	return value.Elem().Kind() == reflect.Struct
+	return value.Kind() == reflect.Ptr && value.Elem().Kind() == reflect.Struct
 }
 
-// forEachStructField loops over all the fields of the provided input (struct)
-// and calls action for each of those fields.
-//
-// The "input" argument should be a struct (not even a struct pointer).
-//
-// The "action" argument is the function to be called for each field.
-//
-// The "parents" argument is received by recursive calls made internally.
-// In most cases, user should provide this value as nil.
-func forEachStructField(input interface{}, action structFieldAction, parents []*reflect.StructField) error {
-	inputValue := reflect.ValueOf(input)
-	inputType := reflect.TypeOf(input)
+// getFlagNameAndDoc accepts the tag value of the "arg" tag and returns the flagName and flagDoc.
+// The function assumes that the name and doc are separated by the provided separator.
+func getFlagNameAndDoc(tagValue string, sep string) (flagName string, flagDoc string) {
+	split := strings.SplitN(tagValue, sep, 2)
 
-	// This loop runs N times, where N is the number of fields in the input.
-	for i := 0; i < inputValue.NumField(); i++ {
-		fieldValue := inputValue.Field(i)
-		fieldType := inputType.Field(i)
-
-		// If value is a pointer, then we extract the pointer's value. This allows for cleaner code below.
-		if fieldValue.Kind() == reflect.Ptr {
-			fieldValue = fieldValue.Elem()
-		}
-
-		switch fieldValue.Kind() {
-		// If the field is of type struct, we recursively loop over its fields.
-		case reflect.Struct:
-			newParents := append(parents, &fieldType)
-			if err := forEachStructField(fieldValue.Interface(), action, newParents); err != nil {
-				return err
-			}
-		// If the field is other than a struct, we execute the action for it.
-		default:
-			if err := action(parents, &fieldType); err != nil {
-				return err
-			}
-		}
+	switch len(split) {
+	case 0:
+		return "", ""
+	case 1:
+		return split[0], ""
+	case 2:
+		return split[0], split[1]
+	default:
+		return "", ""
 	}
-
-	return nil
 }
 
 // string2Interface converts string values to JSON.
 //
-// Note that ints, floats, booleans etc are also valid JSON.
+// Note that int, float, booleans etc. are also valid JSON.
 func string2Interface(kind reflect.Kind, value string) (interface{}, error) {
 	if kind == reflect.String {
 		return value, nil
@@ -71,8 +40,27 @@ func string2Interface(kind reflect.Kind, value string) (interface{}, error) {
 
 	var converted interface{}
 	if err := json.Unmarshal([]byte(value), &converted); err != nil {
-		return nil, fmt.Errorf("confetti: failed to convert value: %w", err)
+		return nil, err
 	}
-
 	return converted, nil
+}
+
+// formatNestedFieldName accepts a field and its parents to create a formatted name string.
+// Example: Parent1.Parent2.MyField
+func formatNestedFieldName(parents []rsf, field rsf) string {
+	var formatted string
+	for _, parent := range parents {
+		formatted += fmt.Sprintf("%s.", parent.Name)
+	}
+	formatted += field.Name
+	return formatted
+}
+
+// checkAndWrapErr returns nil if 'err' is nil.
+// If 'err' is not nil, it wraps the 'err' in 'wrappingErr' and returns it.
+func checkAndWrapErr(err error, wrappingErr error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s %w", wrappingErr.Error(), err)
 }

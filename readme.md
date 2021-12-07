@@ -1,77 +1,143 @@
 # Confetti
+A simple config manager for Go applications.
 
-A minimal configuration manager for Go applications.
-
-## Quickstart
-
-Confetti makes it really easy to read configs from environment variables and command-line flags.
-
-Consider the following snippet:
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/shivanshkc/confetti"
-)
-
-type configs struct {
-	HTTPServer struct {
-		Addr string `default:"0.0.0.0:8080" env:"HTTP_SERVER_ADDR" arg:"http-server-addr"`
-	}
-
-	GRPCServer struct {
-		Addr string `default:"0.0.0.0:9090" env:"GRPC_SERVER_ADDR" arg:"grpc-server-addr"`
-	}
-
-	LogLevel string `default:"info" env:"LOG_LEVEL" arg:"log-level"`
-}
-
-func main() {
-	conf := &configs{}
-
-	loader := confetti.GetLoader()
-	if err := loader.Load(conf); err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("Conf: %+v\n", conf)
-}
+## Install
+Use the following:  
+```
+go get -u github.com/shivanshkc/confetti/v2
 ```
 
-Try it on Playground: https://play.golang.org/p/4xV4XL8eUol
+## When to use Confetti
+Confetti only has a few, but well implemented set of features. It makes it really easy to use and understand.  
+If your application fits the following use-case, Confetti is the best config manager you can get.  
+1. The configs have to be loaded/unmarshalled into a struct.
+2. The configs are loaded once at application startup and do not change for the entire runtime of the application.
+3. The configs are loaded either from the environment or command-line flags (No JSON/YAML files or remote servers).
 
-Here are the main points to be noticed in this code snippet:
+## Beauty of Confetti
+If your application agrees with the above restrictions, you can enjoy the following features of Confetti:  
+1. ### Concise syntax using struct tags
+    ```go
+    package main
 
-- The `configs` struct is the schema for our configs.
-- We can bind the fields to a default value by using the `default` tag.
-- We can bind the fields to environment variables using the `env` tag.
-- We can bind the fields to command-line args using the `arg` tag.
-- To actually load the configs, we need the `confetti.Loader` type, which is provided by `confetti.GetLoader` function.
-- The configs are loaded into an instance of our struct, by provided it to the `loader.Load` method.
-
-## Examples
-
-With the provided code-snippet in mind:
-
-1.  The following will output all the default config values.
-
-    ```bash
-    go run main.go
+    type Configs struct {
+        Port string `def:"8080" env:"PORT" arg:"port"`
+    }
     ```
+    This is all you need to make a struct usable with Confetti. Use the following code to load the configs:
+    ```go
+    import (
+        "fmt"
+   
+        "github.com/shivanshkc/confetti/v2"
+    )   
 
-2.  The following will output all the default configs, except for the `HTTPServer.Addr` config, whose default value will be overridden by the environment variable.
+    func main() {
+        loader := confetti.NewDefLoader()
 
-    ```bash
-    HTTP_SERVER_ADDR=localhost:3000 go run main.go
+        configs := &Configs{}
+        if err := loader.Load(configs); err != nil {
+            panic(err)
+        }
+
+        fmt.Println("Configs:", configs)
+    }
     ```
+    Here, as you may have guessed:  
+    a. The ```Port``` config has the default value of ```8080```.  
+    b. If the environment variable ```PORT``` is provided, it will override the default value.  
+    c. If the ```-port``` or ```--port``` flag is provided, it will override both the default value and the environment variable.
 
-3.  This time the `HTTPServer.Addr` property will be equal to the command-line flag provided, **as it is prioritized above the environment variable**.
-
-    ```bash
-    HTTP_SERVER_ADDR=localhost:3000 go run main.go --http-server-addr=localhost:4000
+2. ### Generates documentation for your application
+    If you use the code in the last point, and execute ```go run main.go -h```, you will see the following on your console:
     ```
+    Usage of configs:
+    -port value
+            Doc: not provided
+            Default: 8080
+            Environment: PORT
+    panic: failed to parse flags: flag: help requested
+    ```
+    Confetti auto-generates this help documentation for your application using Go's ```flag``` package.  
+    In the output above, notice the ```Doc: not provided``` line. This is because we did not provide any doc on the ```Port``` config. It can be provided as follows:
+    ```go
+    type Configs struct {
+        Port string `def:"8080" env:"PORT" arg:"port,HTTP server port"`
+    }
+    ```
+    Now, the output will read:
+    ```
+    Usage of configs:
+    -port value
+        Doc: HTTP server port
+        Default: 8080
+        Environment: PORT
+    panic: failed to parse flags: flag: help requested
+    ```
+    Next, you must be getting annoyed by the panic message at the bottom. This is because Go's ```flag``` package returns an error when a ```-h``` or ```-help``` flag is provided. To get rid of this, use the following:
+    ```go
+    import (
+        "errors"
+        "fmt"
+   
+        "github.com/shivanshkc/confetti/v2"   
+    )
 
-    Make sure to provide your command-line args in: `--<name>=<value>` format.
+    func main() {
+        loader := confetti.NewDefLoader()
+
+        configs := &Configs{}
+        if err := loader.Load(configs); err != nil {
+            if errors.Is(err, flag.ErrHelp) {
+		        return
+	        }
+            panic(err)
+        }
+
+        fmt.Println("Configs:", configs)
+    }
+    ```  
+
+3. ### Nested structs
+    Confetti is built to handle nested structs. Just make sure that the flag names for all fields are always different, otherwise you'll get a panic.
+    ```go
+    type Configs struct {
+        HTTP struct {
+            Port string `def:"8080" env:"HTTP_PORT" arg:"http-port"`
+        }
+
+        GRPC struct {
+            Port string `def:"7070" env:"GRPC_PORT" arg:"grpc-port"`
+        }
+    }
+    ```
+    The above struct is a completely valid Confetti target.
+
+4. ### Automatic type assertions
+    Confetti is built to handle all types of configs, and not just strings. Consider the following example:
+    ```go
+    type Configs struct {
+        CORS struct {
+            TrustedOrigins []string `def:"[\"google.com\"]" env:"TRUSTED_ORIGINS" arg:"trusted-origins"`
+        }
+
+        Pagination struct {
+            DefaultLimit int `def:"100" env:"DEFAULT_LIMIT" arg:"default-limit"`
+        }
+
+        RedisDetails map[string]string `def:"{}" env:"REDIS_DETAILS" arg:"redis-details"`
+    }
+    ```
+    This struct is also a valid Confetti target. Just make sure that the value of the environment variable or flag is a valid JSON string, otherwise Confetti will give you an error.
+
+## Confetti options
+Confetti exposes a ```NewLoader``` function and a ```NewDefLoader``` function (as used in the examples above).  
+The ```NewDefLoader``` uses the default options, but users can provide their own options by using the ```NewLoader``` function.  
+Here is the explanation of all available options:  
+| Name       | Description                                              | Default value |
+| ---------- | -------------------------------------------------------- | ------------- |
+| Title      | The title that shows up on help documentation.           | configs       |
+| DefTagName | The name of the tag that controls the default value.     | def           |
+| EnvTagName | The name of the tag that controls the env variable name. | env           |
+| ArgTagName | The name of the tag that controls the flag name.         | arg           |
+| UseDotEnv  | Whether to use the .env file if present.                 | false         |
