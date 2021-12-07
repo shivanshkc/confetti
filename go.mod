@@ -1,4 +1,4 @@
-module github.com/shivanshkc/confetti
+module github.com/shivanshkc/confetti/v2
 
 go 1.17
 
