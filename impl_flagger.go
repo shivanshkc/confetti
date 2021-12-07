@@ -36,9 +36,8 @@ func (i *implFlagger) RegisterField(parents []rsf, field rsf) error {
 	if flagName == "" {
 		return nil
 	}
-	if flagDoc != "" {
-		// For a more understandable display.
-		flagDoc += "\n"
+	if flagDoc == "" {
+		flagDoc = "not provided"
 	}
 
 	// Using the def and env tag values to show even more info on "-h".
@@ -53,7 +52,7 @@ func (i *implFlagger) RegisterField(parents []rsf, field rsf) error {
 	}
 
 	// The usage instructions that will show up on "-h".
-	usage := fmt.Sprintf("%sDefault: %s\nEnvironment: %s", flagDoc, defValue, envValue)
+	usage := fmt.Sprintf("%s\nDefault: %s\nEnvironment: %s", flagDoc, defValue, envValue)
 
 	// Binding the flag values to customFlagHolder.
 	i.flags[flagName] = &customFlagHolder{}

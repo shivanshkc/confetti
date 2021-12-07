@@ -16,7 +16,7 @@ func isStructPointer(input interface{}) bool {
 // getFlagNameAndDoc accepts the tag value of the "arg" tag and returns the flagName and flagDoc.
 // The function assumes that the name and doc are separated by the provided separator.
 func getFlagNameAndDoc(tagValue string, sep string) (flagName string, flagDoc string) {
-	split := strings.SplitN(tagValue, ",", 2)
+	split := strings.SplitN(tagValue, sep, 2)
 
 	switch len(split) {
 	case 0:
